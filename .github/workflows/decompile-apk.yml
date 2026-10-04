@@ -20,70 +20,78 @@ jobs:
 
       - name: Install tools
         run: |
-          set -e
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y unzip wget openjdk-17-jre-headless p7zip-full
+          sudo apt-get install -y unzip wget zip openjdk-17-jre-headless
           java -version
 
-      - name: Locate APK
+      - name: Locate or reconstruct APK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           rm -rf work
-          mkdir -p work/unpacked
-          echo "Repository files:"
-          find . -maxdepth 4 -type f -not -path './.git/*' -not -path './work/*' -print | sort
-          echo "Archive inspection:"
-          for f in $(find . -type f -iname '*.zip' -not -path './.git/*' -not -path './work/*'); do
-            echo "===== $f ====="
-            7z l "$f" | head -80 || true
-          done
+          mkdir -p work/candidates work/reconstructed
+          : > work/apk_path.txt
 
-          find . -type f -not -path './.git/*' -not -path './work/*' -print0 |
+          echo "Repository files:"
+          find . -maxdepth 5 -type f -not -path './.git/*' -not -path './work/*' -print | sort
+
+          # 1) Prefer a real APK file.
           while IFS= read -r -d '' f; do
-            if unzip -l "$f" >/dev/null 2>&1 &&
-               unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])AndroidManifest\.xml' &&
-               unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])classes([0-9]*)\.dex'; then
+            if unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])[^[:space:]]*/?AndroidManifest\.xml[[:space:]]*$' &&
+               unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])[^[:space:]]*/?classes([0-9]*)\.dex[[:space:]]*$'; then
               printf '%s\n' "$f" > work/apk_path.txt
               break
             fi
-          done
+          done < <(find . -type f -iname '*.apk' -not -path './.git/*' -not -path './work/*' -print0)
 
-          for depth in 1 2 3; do
-            find . -type f -iname '*.zip' -not -path './.git/*' -not -path './work/*' -print0 |
+          # 2) The current repository stores the APK as a ZIP whose contents
+          #    are under a directory (123kt/AndroidManifest.xml, classes.dex, ...).
+          #    Extract every ZIP and rebuild an APK from the directory that
+          #    contains AndroidManifest.xml + classes*.dex.
+          if [ ! -s work/apk_path.txt ]; then
             while IFS= read -r -d '' z; do
-              out="work/unpacked/d$depth/$(basename "$z" .zip)"
+              base="$(basename "$z")"
+              stem="${base%.*}"
+              out="work/candidates/$stem"
+              rm -rf "$out"
               mkdir -p "$out"
-              7z x -y "$z" -o"$out" >/dev/null || true
-            done
+              unzip -q "$z" -d "$out"
 
-            if [ ! -s work/apk_path.txt ]; then
-              find "work/unpacked/d$depth" -type f -print0 |
-              while IFS= read -r -d '' f; do
-                if unzip -l "$f" >/dev/null 2>&1 &&
-                   unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])AndroidManifest\.xml' &&
-                   unzip -l "$f" 2>/dev/null | grep -qE '(^|[[:space:]])classes([0-9]*)\.dex'; then
-                  printf '%s\n' "$f" > work/apk_path.txt
-                  break
-                fi
-              done
-            fi
-            [ -s work/apk_path.txt ] && break
-          done
+              manifest="$(find "$out" -type f -name AndroidManifest.xml -print -quit)"
+              if [ -z "$manifest" ]; then
+                continue
+              fi
+              root="$(dirname "$manifest")"
+
+              if find "$root" -maxdepth 1 -type f -regex '.*/classes[0-9]*\.dex' -print -quit | grep -q .; then
+                reconstructed="work/reconstructed/recovered.apk"
+                rm -f "$reconstructed"
+                (
+                  cd "$root"
+                  zip -q -r "$OLDPWD/$reconstructed" .
+                )
+                printf '%s\n' "$reconstructed" > work/apk_path.txt
+                echo "Reconstructed APK from: $root"
+                break
+              fi
+            done < <(find . -type f -iname '*.zip' -not -path './.git/*' -not -path './work/*' -print0)
+          fi
 
           if [ ! -s work/apk_path.txt ]; then
-            echo "No Android APK structure found."
-            echo "The current repository does not contain the APK to decompile."
+            echo "::error::No APK structure found. Expected AndroidManifest.xml and classes*.dex."
             exit 1
           fi
 
           APK="$(head -n 1 work/apk_path.txt)"
           echo "APK=$APK" >> "$GITHUB_ENV"
           echo "Using APK: $APK"
+          unzip -l "$APK" | grep -E 'AndroidManifest\.xml|classes([0-9]*)\.dex' | head -20 || true
           ls -lh "$APK"
 
       - name: Install JADX
         run: |
+          set -euo pipefail
           wget -q https://github.com/skylot/jadx/releases/download/v1.5.1/jadx-1.5.1.zip -O /tmp/jadx.zip
           sudo unzip -q /tmp/jadx.zip -d /opt/jadx
           sudo chmod +x /opt/jadx/bin/jadx
@@ -91,6 +99,7 @@ jobs:
 
       - name: Install Apktool
         run: |
+          set -euo pipefail
           wget -q https://raw.githubusercontent.com/iBotPeaches/Apktool/v2.9.3/scripts/linux/apktool -O /tmp/apktool
           wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O /tmp/apktool.jar
           sudo install -m 755 /tmp/apktool /usr/local/bin/apktool
@@ -100,23 +109,28 @@ jobs:
       - name: Decompile APK
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf decompiled
           mkdir -p decompiled/jadx decompiled/apktool decompiled/assets
+
           /opt/jadx/bin/jadx --show-bad-code --deobf -d decompiled/jadx "$APK" || true
           apktool d -f -o decompiled/apktool "$APK" || true
+
           unzip -p "$APK" assets/index.android.bundle > decompiled/assets/index.android.bundle 2>/dev/null || true
           unzip -p "$APK" assets/app.config > decompiled/assets/app.config 2>/dev/null || true
+
           printf 'APK=%s\n' "$APK" > decompiled/README.txt
           printf 'Generated by GitHub Actions using JADX and Apktool.\n' >> decompiled/README.txt
 
-      - name: Package source
+      - name: Package recovered source
         run: |
+          set -euo pipefail
           cd decompiled
           zip -qr ../decompiled-source.zip .
           cd ..
           ls -lh decompiled-source.zip
 
-      - name: Upload decompiled source
+      - name: Upload recovered source
         uses: actions/upload-artifact@v4
         with:
           name: decompiled-source
