@@ -1,0 +1,1 @@
+This file triggers the APK decompile workflow. APK/ZIP input is already in this repository.
