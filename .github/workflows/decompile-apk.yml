@@ -126,16 +126,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f assets/index.android.bundle ]; then
-            echo "::warning::Hermes bundle not found"
+          BUNDLE="decompiled/assets/index.android.bundle"
+          if [ ! -f "$BUNDLE" ]; then
+            echo "::warning::Hermes bundle not found: $BUNDLE"
             exit 0
           fi
           python3 -m pip install --no-cache-dir hermes-dec==0.1.7
           mkdir -p decompiled/hermes
-          hbc-file-parser assets/index.android.bundle > decompiled/hermes/header.txt
-          hbc-decompiler assets/index.android.bundle decompiled/hermes/app-pseudo.js > decompiled/hermes/decompiler.log 2>&1 || true
-          hbc-disassembler assets/index.android.bundle decompiled/hermes/app.hasm > decompiled/hermes/disassembler.log 2>&1 || true
-          strings assets/index.android.bundle | grep -Ei 'device|android.?id|installation|client.?id|license|activate|unlock|lock|serial|uuid|secure|authorization|token|http' > decompiled/hermes/suspicious-strings.txt || true
+          hbc-file-parser "$BUNDLE" > decompiled/hermes/header.txt
+          hbc-decompiler "$BUNDLE" decompiled/hermes/app-pseudo.js > decompiled/hermes/decompiler.log 2>&1 || true
+          hbc-disassembler "$BUNDLE" decompiled/hermes/app.hasm > decompiled/hermes/disassembler.log 2>&1 || true
+          strings "$BUNDLE" | grep -Ei 'device|android.?id|installation|client.?id|license|activate|unlock|lock|serial|uuid|secure|authorization|token|http' > decompiled/hermes/suspicious-strings.txt || true
 
       - name: Package recovered source
         run: |
