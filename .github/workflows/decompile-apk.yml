@@ -69,7 +69,7 @@ jobs:
                 rm -f "$reconstructed"
                 (
                   cd "$root"
-                  zip -q -r "$OLDPWD/$reconstructed" .
+                  zip -q -r "$GITHUB_WORKSPACE/$reconstructed" .
                 )
                 printf '%s\n' "$reconstructed" > work/apk_path.txt
                 echo "Reconstructed APK from: $root"
