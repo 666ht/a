@@ -89,6 +89,41 @@ jobs:
           unzip -l "$APK" | grep -E 'AndroidManifest\.xml|classes([0-9]*)\.dex' | head -20 || true
           ls -lh "$APK"
 
+      - name: Prepare installable diagnostic APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/opt/android-sdk}"
+          ZIPALIGN="$(find "$SDK" -type f -name zipalign -perm -111 2>/dev/null | sort -V | tail -1)"
+          APKSIGNER="$(find "$SDK" -type f -name apksigner -perm -111 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$ZIPALIGN" ] || [ -z "$APKSIGNER" ]; then
+            echo "::error::Android zipalign/apksigner not found"
+            exit 1
+          fi
+          mkdir -p work/diagnostic
+          cp "$APK" work/diagnostic/original.apk
+          keytool -genkeypair -v \
+            -keystore work/diagnostic/test-signing.keystore \
+            -storepass android -keypass android \
+            -alias testkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=666ht-diagnostic,O=666ht,C=JP" >/dev/null 2>&1
+          "$ZIPALIGN" -f 4 work/diagnostic/original.apk work/diagnostic/aligned.apk
+          "$APKSIGNER" sign \
+            --ks work/diagnostic/test-signing.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out diagnostic.apk \
+            work/diagnostic/aligned.apk
+          "$APKSIGNER" verify --verbose diagnostic.apk
+          ls -lh diagnostic.apk
+
+      - name: Upload installable diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-apk
+          path: diagnostic.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Install JADX
         run: |
           set -euo pipefail
