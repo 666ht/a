@@ -208,6 +208,7 @@ EOF
           if-no-files-found: error
           retention-days: 14
       - name: Deep inspect Hermes bundle for ID lock
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -225,6 +226,7 @@ EOF
           strings "$BUNDLE" | grep -Ei 'android.?id|device.?id|installation.?id|license|activate|authorization|unlock|locked|serial|uuid|token|c4l39|is.?login|login' > decompiled/hermes/string-hits.txt || true
 
       - name: Decompile Hermes JavaScript bundle
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
