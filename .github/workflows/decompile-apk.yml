@@ -242,6 +242,47 @@ jobs:
             git commit -m "ci: record ID lock code context"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
+      - name: Rebuild installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf work/rebuild
+          mkdir -p work/rebuild
+
+          apktool b --use-aapt2 decompiled/apktool -o work/rebuild/app-unsigned.apk
+          test -s work/rebuild/app-unsigned.apk
+
+          SDK="${ANDROID_HOME:-/opt/android-sdk}"
+          ZIPALIGN="$(find "$SDK" -type f -name zipalign -perm -111 2>/dev/null | sort -V | tail -1)"
+          APKSIGNER="$(find "$SDK" -type f -name apksigner -perm -111 2>/dev/null | sort -V | tail -1)"
+          test -n "$ZIPALIGN"
+          test -n "$APKSIGNER"
+
+          keytool -genkeypair -v \
+            -keystore work/rebuild/rebuild.keystore \
+            -storepass android -keypass android \
+            -alias rebuildkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=666ht-rebuild,O=666ht,C=JP" >/dev/null 2>&1
+
+          "$ZIPALIGN" -f 4 work/rebuild/app-unsigned.apk work/rebuild/app-aligned.apk
+          "$APKSIGNER" sign \
+            --ks work/rebuild/rebuild.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out rebuilt-app.apk \
+            work/rebuild/app-aligned.apk
+          "$APKSIGNER" verify --verbose rebuilt-app.apk
+          unzip -t rebuilt-app.apk >/dev/null
+          ls -lh rebuilt-app.apk
+
+      - name: Upload usable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: usable-apk
+          path: rebuilt-app.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Package recovered source
         run: |
           set -euo pipefail
