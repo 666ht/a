@@ -205,11 +205,16 @@ jobs:
               m=z.read('AndroidManifest.xml')
               if len(m) < 8 or struct.unpack_from('<H', m, 0)[0] != 0x0003: raise SystemExit('bad manifest chunk')
               first_size=struct.unpack_from('<I',m,4)[0]
-              if first_size >= len(m): raise SystemExit('manifest has no XML node chunks')
+              print(f'manifest_len={len(m)} first_chunk_size={first_size}')
               if 'resources.arsc' not in z.namelist(): raise SystemExit('missing resources.arsc')
               for n in ('classes.dex','classes2.dex','classes3.dex'):
                   if n not in z.namelist(): raise SystemExit('missing '+n)
           PY
+          "$AAPT2" dump xmltree rebuilt-app.apk --file AndroidManifest.xml > work/final-xmltree.txt
+          grep -q 'E: manifest' work/final-xmltree.txt
+          grep -q 'E: application' work/final-xmltree.txt
+          grep -q 'E: activity' work/final-xmltree.txt
+          grep -q 'android.intent.action.MAIN' work/final-xmltree.txt
           ls -lh rebuilt-app.apk
 
       - name: Upload usable APK
