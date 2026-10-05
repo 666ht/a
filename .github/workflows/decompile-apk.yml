@@ -138,7 +138,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          p = Path('work/original/AndroidManifest.xml')
+          p = Path('decompiled/apktool/AndroidManifest.xml')
           s = p.read_text(errors='replace')
           s = re.sub(r'\s+android:theme="@2131951629"', ' android:theme="@android:style/Theme.Material.Light.NoActionBar"', s, count=1)
           s = re.sub(r'\s+android:label="@2131886109"', ' android:label="AlipayGphone"', s, count=1)
@@ -157,7 +157,7 @@ jobs:
               <string name="app_name">AlipayGphone</string>
           </resources>
           EOF
-          cp work/original/AndroidManifest.xml work/final/AndroidManifest.xml
+          cp decompiled/apktool/AndroidManifest.xml work/final/AndroidManifest.xml
           "$AAPT2" compile work/res/values/strings.xml -o work/compiled/values_strings.arsc.flat
           "$AAPT2" link --auto-add-overlay --manifest work/final/AndroidManifest.xml --min-sdk-version 25 --target-sdk-version 34 --version-code 1 --version-name 10.7.30.8000 -I "$ANDROID_JAR" -R work/compiled/values_strings.arsc.flat -o work/final/base.apk
 
