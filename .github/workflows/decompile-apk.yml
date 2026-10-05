@@ -131,58 +131,82 @@ jobs:
           ANDROID_JAR="$(find "$SDK/platforms" -mindepth 2 -maxdepth 2 -name android.jar | sort -V | tail -1)"
           test -x "$AAPT2"; test -x "$ZIPALIGN"; test -x "$APKSIGNER"; test -s "$ANDROID_JAR"
 
-          rm -rf work/final work/original work/res
-          mkdir -p work/final work/original work/res/values work/compiled
+          rm -rf work/final work/original work/res work/compiled
+          mkdir -p work/final work/original work/res/values work/compiled/flat
           unzip -q "$APK" -d work/original
 
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('decompiled/apktool/AndroidManifest.xml')
-          s = p.read_text(errors='replace')
-          s = re.sub(r'\s+android:theme="@2131951629"', ' android:theme="@android:style/Theme.Material.Light.NoActionBar"', s, count=1)
-          s = re.sub(r'\s+android:label="@2131886109"', ' android:label="AlipayGphone"', s, count=1)
-          s = re.sub(r'\s+android:icon="@[^"]+"', '', s, count=1)
-          s = re.sub(r'\s+android:roundIcon="@[^"]+"', '', s, count=1)
-          s = re.sub(r'\s+android:fullBackupContent="@[^"]+"', '', s, count=1)
-          s = re.sub(r'\s+android:dataExtractionRules="@[^"]+"', '', s, count=1)
-          s = re.sub(r'\s+android:theme="@2131952167"', '', s, count=1)
-          s = re.sub(r'android:theme="@213195[^"]+"', 'android:theme="@android:style/Theme.Material.Light.NoActionBar"', s)
-          s = re.sub(r'<provider[^>]+(?:ClipboardFileProvider|ImagePickerFileProvider|CropFileProvider|FileSystemFileProvider)[\s\S]*?</provider>', '', s)
-          s = re.sub(r'\s+android:resource="@[^"]+"', '', s)
-          p.write_text(s)
-          PY
+          cat > work/final/manifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.kkb.eg.android.AlipayGphone"
+              android:versionCode="1"
+              android:versionName="10.7.30.8000">
+              <uses-sdk android:minSdkVersion="25" android:targetSdkVersion="35" />
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:name="com.kkb.eg.android.AlipayGphone.MainApplication"
+                  android:label="AlipayGphone"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:allowBackup="false"
+                  android:supportsRtl="true"
+                  android:extractNativeLibs="false">
+                  <activity
+                      android:name="com.kkb.eg.android.AlipayGphone.MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask"
+                      android:screenOrientation="portrait"
+                      android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|uiMode"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
           cat > work/res/values/strings.xml <<'EOF'
-          <resources>
-              <string name="app_name">AlipayGphone</string>
-          </resources>
+          <resources><string name="app_name">AlipayGphone</string></resources>
           EOF
-          cp decompiled/apktool/AndroidManifest.xml work/final/AndroidManifest.xml
-          mkdir -p work/compiled/flat
           "$AAPT2" compile work/res/values/strings.xml -o work/compiled/flat
-          FLAT=$(find work/compiled/flat -type f -name "*.arsc.flat" | head -1)
+          FLAT="$(find work/compiled/flat -type f -name '*.arsc.flat' -print -quit)"
           test -s "$FLAT"
-          "$AAPT2" link --auto-add-overlay --manifest work/final/AndroidManifest.xml --min-sdk-version 25 --target-sdk-version 34 --version-code 1 --version-name 10.7.30.8000 -I "$ANDROID_JAR" -R "$FLAT" -o work/final/base.apk
+          "$AAPT2" link --manifest work/final/manifest.xml --min-sdk-version 25 --target-sdk-version 35 --version-code 1 --version-name 10.7.30.8000 --auto-add-overlay -I "$ANDROID_JAR" -R "$FLAT" -o work/final/base.apk
+          unzip -qo work/final/base.apk AndroidManifest.xml resources.arsc -d work/final
+          test -s work/final/AndroidManifest.xml
+          test -s work/final/resources.arsc
 
-          cd work/final
-          unzip -qo base.apk AndroidManifest.xml resources.arsc
-          rm -f base.apk
-          cd ../..
-          cp work/original/classes*.dex work/final/ 2>/dev/null || true
+          cp work/original/classes.dex work/final/
+          cp work/original/classes2.dex work/final/
+          cp work/original/classes3.dex work/final/
           cp -a work/original/assets work/final/ 2>/dev/null || true
           cp -a work/original/lib work/final/ 2>/dev/null || true
           cp -a work/original/kotlin work/final/ 2>/dev/null || true
-          cp -a work/original/unknown work/final/ 2>/dev/null || true
-          rm -rf work/final/META-INF work/final/res work/final/original
+          rm -rf work/final/base.apk work/final/manifest.xml work/final/META-INF
           (cd work/final && zip -qr ../../work/rebuilt-unsigned.apk .)
           "$ZIPALIGN" -f 4 work/rebuilt-unsigned.apk work/rebuilt-aligned.apk
           keytool -genkeypair -v -keystore work/rebuild.keystore -storepass android -keypass android -alias rebuildkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=666ht-rebuild,O=666ht,C=JP' >/dev/null 2>&1
           "$APKSIGNER" sign --ks work/rebuild.keystore --ks-pass pass:android --key-pass pass:android --out rebuilt-app.apk work/rebuilt-aligned.apk
           "$APKSIGNER" verify --verbose rebuilt-app.apk
           unzip -t rebuilt-app.apk >/dev/null
-          unzip -l rebuilt-app.apk | grep -q 'resources.arsc'
-          unzip -l rebuilt-app.apk | grep -q 'AndroidManifest.xml'
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile,struct
+          p=Path('rebuilt-app.apk')
+          with zipfile.ZipFile(p) as z:
+              m=z.read('AndroidManifest.xml')
+              if len(m) < 8 or m[0:2] != b'\\x03\\x00': raise SystemExit('bad manifest chunk')
+              first_size=struct.unpack_from('<I',m,4)[0]
+              if first_size >= len(m): raise SystemExit('manifest has no XML node chunks')
+              if 'resources.arsc' not in z.namelist(): raise SystemExit('missing resources.arsc')
+              for n in ('classes.dex','classes2.dex','classes3.dex'):
+                  if n not in z.namelist(): raise SystemExit('missing '+n)
+          PY
           ls -lh rebuilt-app.apk
 
       - name: Upload usable APK
