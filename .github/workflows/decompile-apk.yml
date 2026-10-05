@@ -180,6 +180,8 @@ jobs:
           unzip -qo work/final/base.apk AndroidManifest.xml resources.arsc -d work/final
           test -s work/final/AndroidManifest.xml
           test -s work/final/resources.arsc
+          echo "=== AAPT2 manifest tree ==="
+          "$AAPT2" dump xmltree work/final/base.apk --file AndroidManifest.xml | head -120
 
           cp work/original/classes.dex work/final/
           cp work/original/classes2.dex work/final/
