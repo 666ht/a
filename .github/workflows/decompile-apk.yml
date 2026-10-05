@@ -147,6 +147,7 @@ jobs:
           s = re.sub(r'\s+android:fullBackupContent="@[^"]+"', '', s, count=1)
           s = re.sub(r'\s+android:dataExtractionRules="@[^"]+"', '', s, count=1)
           s = re.sub(r'\s+android:theme="@2131952167"', '', s, count=1)
+          s = re.sub(r'android:theme="@213195[^"]+"', 'android:theme="@android:style/Theme.Material.Light.NoActionBar"', s)
           s = re.sub(r'<provider[^>]+(?:ClipboardFileProvider|ImagePickerFileProvider|CropFileProvider|FileSystemFileProvider)[\s\S]*?</provider>', '', s)
           s = re.sub(r'\s+android:resource="@[^"]+"', '', s)
           p.write_text(s)
