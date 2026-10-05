@@ -166,7 +166,7 @@ jobs:
           "$AAPT2" link --auto-add-overlay --manifest work/final/AndroidManifest.xml --min-sdk-version 25 --target-sdk-version 34 --version-code 1 --version-name 10.7.30.8000 -I "$ANDROID_JAR" -R "$FLAT" -o work/final/base.apk
 
           cd work/final
-          unzip -q base.apk AndroidManifest.xml resources.arsc
+          unzip -qo base.apk AndroidManifest.xml resources.arsc
           rm -f base.apk
           cd ../..
           cp work/original/classes*.dex work/final/ 2>/dev/null || true
