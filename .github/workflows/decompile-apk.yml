@@ -4,10 +4,6 @@ name: Decompile APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '**.apk'
-      - '**.zip'
-      - '.github/workflows/decompile-apk.yml'
 
 jobs:
   decompile:
