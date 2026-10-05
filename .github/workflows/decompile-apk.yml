@@ -158,8 +158,11 @@ jobs:
           </resources>
           EOF
           cp decompiled/apktool/AndroidManifest.xml work/final/AndroidManifest.xml
-          "$AAPT2" compile work/res/values/strings.xml -o work/compiled/values_strings.arsc.flat
-          "$AAPT2" link --auto-add-overlay --manifest work/final/AndroidManifest.xml --min-sdk-version 25 --target-sdk-version 34 --version-code 1 --version-name 10.7.30.8000 -I "$ANDROID_JAR" -R work/compiled/values_strings.arsc.flat -o work/final/base.apk
+          mkdir -p work/compiled/flat
+          "$AAPT2" compile work/res/values/strings.xml -o work/compiled/flat
+          FLAT=$(find work/compiled/flat -type f -name "*.arsc.flat" | head -1)
+          test -s "$FLAT"
+          "$AAPT2" link --auto-add-overlay --manifest work/final/AndroidManifest.xml --min-sdk-version 25 --target-sdk-version 34 --version-code 1 --version-name 10.7.30.8000 -I "$ANDROID_JAR" -R "$FLAT" -o work/final/base.apk
 
           cd work/final
           unzip -q base.apk AndroidManifest.xml resources.arsc
