@@ -1,2 +1,1 @@
-run_id=37270498692
-job_status=failure
+trigger=resource-complete-apk
